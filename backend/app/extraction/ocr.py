@@ -83,20 +83,7 @@ def extract_text_with_ocr(image_bytes: bytes) -> Optional[str]:
     except Exception as e:
         logger.debug(f"OCR subprocess execution failed: {e}")
 
-    # 2. Direct in-process RapidOCR fallback
-    try:
-        from rapidocr_onnxruntime import RapidOCR
-        ocr = RapidOCR(use_cls=False, max_side_len=1024)
-        result, _ = ocr(processed_bytes)
-        if result:
-            lines = [line[1] for line in result if len(line) > 1 and line[1]]
-            text = "\n".join(lines).strip()
-            if text:
-                return text
-    except Exception as e:
-        logger.debug(f"Direct RapidOCR fallback skipped: {e}")
-
-    # 3. Fallback to pytesseract if installed
+    # 2. Fallback to pytesseract if installed
     try:
         import pytesseract
         image = Image.open(io.BytesIO(processed_bytes))
