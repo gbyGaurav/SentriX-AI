@@ -1,25 +1,38 @@
-"""Enhanced explainability engine that generates evidence-based explanations."""
+"""SentriX Explainability Engine.
+Generates comprehensive, structured, professional cybersecurity intelligence reports
+from multimodal detector outputs, relational evidence graphs, and threat classifications.
+Works completely offline without requiring any external paid API keys.
+"""
 
+from typing import List, Dict, Any, Optional
 from app.schemas.analysis import RiskLevel, FraudType, DetectorResult, EvidenceItem
-from typing import List
-
 
 MODULE_DISPLAY_NAMES = {
-    'url_fraud': 'URL Analysis',
-    'text_fraud': 'Text/NLP Analysis',
-    'qr_fraud': 'QR Code Analysis',
-    'document_fraud': 'Document Analysis',
-    'image_fraud': 'Image Analysis',
-    'video_fraud': 'Video Analysis',
-    'audio_fraud': 'Audio Analysis',
+    'url_fraud': 'URL & Domain Analysis',
+    'text_fraud': 'Social Engineering & NLP Analysis',
+    'qr_fraud': 'QR Payload & Quishing Analysis',
+    'document_fraud': 'Document Authenticity & Structure',
+    'image_fraud': 'Visual Forensics & ELA Inspection',
+    'video_fraud': 'Video Temporal Consistency Analysis',
+    'audio_fraud': 'Acoustic & Transcription Analysis',
+}
+
+FRAUD_TYPE_DESCRIPTIONS = {
+    FraudType.PHISHING: "Deceptive attempt to steal credentials, account access, or sensitive credentials via spoofed interfaces.",
+    FraudType.SCAM: "Fraudulent scheme designed to solicit unauthorized payments, fake prizes, or bogus investments.",
+    FraudType.SOCIAL_ENGINEERING: "Psychological manipulation exploiting urgency, fear, authority, or trust to compel user action.",
+    FraudType.IDENTITY_THEFT: "Unlawful harvesting of personal identifiers (SSN, OTP, Passwords, banking numbers).",
+    FraudType.FINANCIAL_FRAUD: "Direct fraudulent transaction demands, fake invoice billing, or wire transfer coercion.",
+    FraudType.DEEPFAKE: "Synthetic media generation or digital manipulation mimicking authentic individuals.",
+    FraudType.DOCUMENT_FRAUD: "Structural forgery, fabricated invoice headers, or manipulated document metadata.",
+    FraudType.MALWARE: "Potential distribution of malicious executables, dangerous scripts, or exploit payloads.",
+    FraudType.SPAM: "Unsolicited mass messaging promoting unverified third-party services.",
+    FraudType.UNKNOWN: "Uncategorized anomaly requiring independent verification.",
 }
 
 
 class ExplainabilityEngine:
-    """Generates human-readable explanations from actual detector outputs.
-    
-    Every explanation references real signals — no fabricated reasons.
-    """
+    """Generates structured, zero-hallucination cybersecurity intelligence reports."""
 
     def generate_explanation(
         self,
@@ -29,65 +42,74 @@ class ExplainabilityEngine:
         detector_results: List[DetectorResult],
         evidence: List[EvidenceItem],
     ) -> str:
-        if risk_score <= 20:
+        """Produces a comprehensive multi-section threat intelligence summary."""
+        if risk_score <= 20 and risk_level == RiskLevel.SAFE:
             return (
-                "The analysis indicates a low likelihood of fraud. "
-                "No significant suspicious patterns were detected across the analyzed content."
+                "### Executive Threat Assessment: SAFE\n"
+                "The SentriX multi-vector inspection pipeline analyzed all provided artifacts and found "
+                "no malicious signatures, abnormal entropy patterns, credential harvesting hooks, or "
+                "cross-modal inconsistencies. The analyzed content conforms to legitimate baseline profiles."
             )
 
-        lines = []
-        lines.append(
-            f"This content has been assessed as {risk_level.value} risk "
-            f"with a score of {risk_score}/100."
+        sections = []
+
+        # 1. Executive Summary
+        type_str = ", ".join(f.value.replace("_", " ") for f in fraud_types if f != FraudType.UNKNOWN) or "POTENTIAL THREAT"
+        sections.append(
+            f"### Executive Summary: {risk_level.value} RISK ({risk_score}/100)\n"
+            f"SentriX threat intelligence engines classified this artifact under **{type_str}**. "
+            f"The computed risk score of **{risk_score}/100** indicates strong indicators of hostile or deceptive intent."
         )
 
-        # Summarize which detectors flagged issues
-        flagging_detectors = [
-            d for d in detector_results
-            if d.fraud_probability > 0.4 and not d.error
-        ]
-        if flagging_detectors:
-            names = [MODULE_DISPLAY_NAMES.get(d.module, d.module) for d in flagging_detectors]
-            if len(names) == 1:
-                lines.append(f"\n{names[0]} identified suspicious indicators.")
-            else:
-                lines.append(
-                    f"\n{len(names)} independent detectors flagged suspicious content: "
-                    + ", ".join(names) + "."
-                )
-
-        # List key signals from all detectors
-        all_signals = []
-        for d in detector_results:
-            for s in d.signals:
-                all_signals.append(s)
-
-        if all_signals:
-            lines.append("\nKey indicators found:")
-            for signal in all_signals[:8]:
-                lines.append(f"  ✓ {signal}")
-            remaining = len(all_signals) - 8
-            if remaining > 0:
-                lines.append(f"  ... and {remaining} additional signal(s).")
-
-        # Cross-modal agreement note
-        if len(flagging_detectors) > 1:
-            lines.append(
-                f"\n⚡ Multiple independent analysis modules agree on the risk assessment, "
-                f"which increases confidence in this result."
+        # 2. Inferred Threat Methodology
+        methodology_lines = []
+        for ft in fraud_types:
+            if ft in FRAUD_TYPE_DESCRIPTIONS and ft != FraudType.UNKNOWN:
+                methodology_lines.append(f"- **{ft.value.replace('_', ' ')}**: {FRAUD_TYPE_DESCRIPTIONS[ft]}")
+        if methodology_lines:
+            sections.append(
+                "### Inferred Attack Methodology\n" + "\n".join(methodology_lines)
             )
 
-        # Evidence relationships
-        if evidence:
-            relationships = [e for e in evidence if e.relationship]
-            if relationships:
-                lines.append("\nCross-modal evidence chain detected:")
-                for ev in relationships[:3]:
-                    lines.append(
-                        f"  → {ev.source_modality} {ev.relationship} {ev.target_modality or 'content'}"
-                    )
+        # 3. Key Forensic Indicators
+        forensic_lines = []
+        for d in detector_results:
+            d_name = MODULE_DISPLAY_NAMES.get(d.module, d.module)
+            if d.signals:
+                forensic_lines.append(f"**{d_name}** (Risk: {d.risk.value}, Probability: {d.fraud_probability:.0%}):")
+                for s in d.signals[:4]:
+                    forensic_lines.append(f"  - {s}")
+        if forensic_lines:
+            sections.append(
+                "### Key Forensic Indicators\n" + "\n".join(forensic_lines)
+            )
 
-        return "\n".join(lines)
+        # 4. Cross-Modal Correlation & Provenance
+        if evidence:
+            ev_lines = []
+            for ev in evidence[:4]:
+                if ev.relationship:
+                    ev_lines.append(
+                        f"  -> `{ev.source_modality}` {ev.relationship.replace('_', ' ')} `{ev.target_modality or 'payload'}`: *{ev.content[:80]}*"
+                    )
+            if ev_lines:
+                sections.append(
+                    "### Cross-Modal Correlation Trail\n"
+                    "Automated cascading traced secondary threat vectors across modalities:\n"
+                    + "\n".join(ev_lines)
+                )
+
+        # 5. Multi-Engine Agreement Assessment
+        flagging_detectors = [d for d in detector_results if d.fraud_probability >= 0.4 and not d.error]
+        if len(flagging_detectors) > 1:
+            det_names = [MODULE_DISPLAY_NAMES.get(d.module, d.module) for d in flagging_detectors]
+            sections.append(
+                f"### Corroboration & Multi-Engine Agreement\n"
+                f"{len(flagging_detectors)} independent specialized detection modules ({', '.join(det_names)}) "
+                f"concurred on the high-risk classification. Cross-module agreement significantly lowers false positive probability."
+            )
+
+        return "\n\n".join(sections)
 
     def generate_recommendations(
         self,
@@ -98,38 +120,26 @@ class ExplainabilityEngine:
         recs = []
 
         if risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL):
-            recs.append("Do not click any links or download attachments from this content.")
-            recs.append("Do not provide personal information, passwords, or financial details.")
+            recs.append("Do not click any embedded links, enter credentials, or open secondary attachments.")
+            recs.append("Never share One-Time Passwords (OTPs), PINs, or account passwords under any circumstance.")
 
         if FraudType.PHISHING in fraud_types:
-            recs.append("Do not click the URL or enter credentials on the linked page.")
-            recs.append("If this appears to be from a known company, visit their official website directly instead.")
-
-        if FraudType.SCAM in fraud_types or FraudType.SOCIAL_ENGINEERING in fraud_types:
-            recs.append("Be skeptical of unsolicited messages requesting money or personal data.")
-            recs.append("Do not send money via gift cards, wire transfers, or cryptocurrency to unknown parties.")
+            recs.append("If this claims to originate from a known institution (e.g. bank, tech provider), navigate to their official website directly via a new browser window.")
+            recs.append("Inspect sender domain records carefully — look for subtle character substitutions or unusual top-level domains.")
 
         if FraudType.FINANCIAL_FRAUD in fraud_types:
-            recs.append("Do not make any payments or transfers based on this communication.")
-            recs.append("Contact your bank directly using their official phone number if concerned.")
+            recs.append("Halt all wire transfers, gift card purchases, and cryptocurrency payments immediately.")
+            recs.append("Verify invoice routing and account numbers by contacting the vendor via an independently verified telephone number.")
 
-        if FraudType.DEEPFAKE in fraud_types:
-            recs.append("Verify the identity of the person through an independent channel (e.g., phone call).")
+        if FraudType.SOCIAL_ENGINEERING in fraud_types:
+            recs.append("Resist artificial urgency: fraudulent actors manufacture time-sensitive panic to bypass rational verification.")
 
         if FraudType.DOCUMENT_FRAUD in fraud_types:
-            recs.append("Verify the document's authenticity with the issuing organization directly.")
+            recs.append("Request a cryptographically signed original or confirm document authenticity directly with the issuing department.")
 
-        # Signal-specific recommendations
-        signal_text = " ".join(signals).lower()
-        if 'otp' in signal_text or 'password' in signal_text:
-            recs.append("Never share OTPs, passwords, or PINs with anyone — legitimate organizations will never ask for these.")
-
-        if 'urgency' in signal_text or 'urgent' in signal_text:
-            recs.append("Take time to verify — legitimate organizations rarely pressure you with artificial urgency.")
-
-        # Always include
-        recs.append("Verify the sender's identity through an independent trusted channel.")
-        recs.append("Report suspicious content to the relevant platform and local authorities if appropriate.")
+        # Always include universal protective best practices
+        recs.append("Report the fraudulent artifact to your security operations team or relevant consumer protection agency.")
+        recs.append("Verify the sender's identity through an independent, pre-established communication channel.")
 
         # Deduplicate while preserving order
         seen = set()

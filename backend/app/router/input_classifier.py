@@ -7,7 +7,10 @@ import re
 import logging
 from typing import Optional
 from fastapi import UploadFile
-import magic
+try:
+    import magic
+except Exception:
+    magic = None
 
 from app.schemas.analysis import InputType
 from app.extraction.qr import extract_qr_from_bytes
@@ -48,11 +51,14 @@ class InputClassifier:
             full_bytes = await file.read()
             await file.seek(0)
 
-            mime_type = ""
-            try:
-                mime_type = magic.from_buffer(header_bytes, mime=True) or ""
-            except Exception as e:
-                logger.debug(f"Magic byte detection error: {e}")
+            mime_type = file.content_type or ""
+            if magic:
+                try:
+                    detected_mime = magic.from_buffer(header_bytes, mime=True)
+                    if detected_mime:
+                        mime_type = detected_mime
+                except Exception as e:
+                    logger.debug(f"Magic byte detection error: {e}")
 
             filename = file.filename or ""
             extension = filename.split(".")[-1].lower() if "." in filename else ""
