@@ -23,7 +23,7 @@ from app.db.models import Analysis, DetectorResultDB, EvidenceDB
 from app.core.config import settings
 
 target_metadata = Base.metadata
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+config.set_main_option("sqlalchemy.url", settings.sync_database_url)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

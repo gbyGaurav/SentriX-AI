@@ -31,8 +31,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"Audio processing: {settings.ENABLE_AUDIO_PROCESSING}")
     logger.info(f"Video processing: {settings.ENABLE_VIDEO_PROCESSING}")
 
-    await init_db()
-    logger.info("Database initialized successfully.")
+    try:
+        await init_db()
+        logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Database init during startup deferred or encountered error: {e}. App will proceed.")
 
     yield
 
@@ -48,9 +51,14 @@ app = FastAPI(
 )
 
 # CORS middleware
+origins = list(settings.allowed_origins_list)
+if "http://localhost:3000" not in origins:
+    origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
