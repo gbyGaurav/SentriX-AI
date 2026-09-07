@@ -53,10 +53,12 @@ class DocumentDetector(FraudDetector):
             # Fallback OCR if scanned PDF (no selectable text but has images)
             if not extracted_text.strip() and pdf_data.get("image_bytes_list"):
                 suspicious_indicators.append("Scanned PDF with no digital text stream; performing visual OCR inspection")
-                for img_bytes in pdf_data["image_bytes_list"]:
+                import gc
+                for img_bytes in pdf_data["image_bytes_list"][:3]:
                     ocr_text = extract_text_with_ocr(img_bytes)
                     if ocr_text:
                         extracted_text += "\n" + ocr_text
+                gc.collect()
 
         elif filename.endswith(".docx") or file_bytes[:4] == b"PK\x03\x04":
             docx_data = extract_docx_data(file_bytes)

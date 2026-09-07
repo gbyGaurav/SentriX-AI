@@ -11,6 +11,7 @@ import time
 import logging
 from typing import Optional, Dict, Any, List
 import numpy as np
+import gc
 from PIL import Image, ImageChops, ImageEnhance
 from app.detectors.base import FraudDetector
 from app.schemas.analysis import DetectorResult
@@ -27,28 +28,42 @@ KNOWN_EDITING_SOFTWARE = [
 def perform_ela(image: Image.Image, quality: int = 90) -> float:
     """Error Level Analysis (ELA).
     Resaves image at specified JPEG quality and computes pixel difference.
+    Safely downsamples large images to <=1200px before allocating numpy arrays.
     Returns the average difference ratio across modified blocks.
     """
     try:
-        if image.mode != "RGB":
-            image = image.convert("RGB")
+        # Scale down if large to prevent huge float32 arrays
+        ela_img = image
+        if max(image.width, image.height) > 1200:
+            scale = 1200.0 / max(image.width, image.height)
+            ela_img = image.resize((int(image.width * scale), int(image.height * scale)), Image.Resampling.BILINEAR)
+
+        if ela_img.mode != "RGB":
+            ela_img = ela_img.convert("RGB")
 
         # Save to buffer at known quality
         buffer = io.BytesIO()
-        image.save(buffer, "JPEG", quality=quality)
+        ela_img.save(buffer, "JPEG", quality=quality)
         buffer.seek(0)
         resaved = Image.open(buffer)
 
         # Difference
-        diff = ImageChops.difference(image, resaved)
+        diff = ImageChops.difference(ela_img, resaved)
         diff_arr = np.array(diff, dtype=np.float32)
-        
+
         # Standard deviation and max difference across high error areas
         mean_diff = float(np.mean(diff_arr))
         std_diff = float(np.std(diff_arr))
-        
+
         # High std with moderate mean indicates localized resaved regions (splicing/tampering)
         ela_anomaly_score = min(1.0, (std_diff / 25.0) * (1.0 if mean_diff > 3.0 else 0.5))
+
+        # Clean up intermediate allocations
+        del diff_arr
+        del diff
+        del resaved
+        gc.collect()
+
         return ela_anomaly_score
     except Exception as e:
         logger.debug(f"ELA calculation error: {e}")
@@ -79,7 +94,19 @@ class ImageDetector(FraudDetector):
 
         try:
             image = Image.open(io.BytesIO(file_bytes))
-            metadata["format"] = image.format
+            # Protect free tier RAM by downsampling excessive image dimensions (>2500px)
+            max_side = max(image.width, image.height)
+            if max_side > 2500:
+                scale = 2500.0 / max_side
+                image = image.resize((int(image.width * scale), int(image.height * scale)), Image.Resampling.BILINEAR)
+                # Re-encode to buffer for subsequent stages
+                buf = io.BytesIO()
+                if image.mode not in ("RGB", "L"):
+                    image = image.convert("RGB")
+                image.save(buf, format="JPEG", quality=88)
+                file_bytes = buf.getvalue()
+
+            metadata["format"] = image.format or "JPEG"
             metadata["size"] = f"{image.width}x{image.height}"
             metadata["mode"] = image.mode
 

@@ -150,17 +150,24 @@ class AIMediaDetector(FraudDetector):
                             if tag in v_str:
                                 signals.append(f"Image metadata references generative AI software: '{tag}'")
                                 ai_evidence.append(f"Metadata tag detected: '{tag}'")
-                
+
+                # Downsample to <=1024px to prevent large float32/fft matrix allocation
+                if max(pil_img.width, pil_img.height) > 1024:
+                    pil_img.thumbnail((1024, 1024), Image.Resampling.BILINEAR)
+
                 rgb_arr = np.array(pil_img.convert("RGB"))
                 images_to_test.append(rgb_arr)
             except Exception as e:
                 logger.debug(f"Could not parse image for AI media check: {e}")
 
         if frames_bytes:
-            for fb in frames_bytes[:4]:
+            for fb in frames_bytes[:2]:
                 try:
                     f_arr = cv2.imdecode(np.frombuffer(fb, np.uint8), cv2.IMREAD_COLOR)
                     if f_arr is not None:
+                        if max(f_arr.shape[0], f_arr.shape[1]) > 720:
+                            scale = 720.0 / max(f_arr.shape[0], f_arr.shape[1])
+                            f_arr = cv2.resize(f_arr, (int(f_arr.shape[1] * scale), int(f_arr.shape[0] * scale)), interpolation=cv2.INTER_AREA)
                         images_to_test.append(cv2.cvtColor(f_arr, cv2.COLOR_BGR2RGB))
                 except Exception:
                     pass
@@ -188,6 +195,11 @@ class AIMediaDetector(FraudDetector):
             n_var, ch_corr = analyze_noise_residual(img)
             noise_variances.append(n_var)
             channel_corrs.append(ch_corr)
+
+        # Clean up image matrix memory immediately
+        del images_to_test
+        import gc
+        gc.collect()
 
         avg_fft = float(np.mean(fft_scores)) if fft_scores else 0.0
         avg_noise_var = float(np.mean(noise_variances)) if noise_variances else 0.0

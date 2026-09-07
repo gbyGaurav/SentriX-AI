@@ -3,8 +3,18 @@
 FastAPI application entry point.
 """
 
+import os
+# Prevent multi-core thread explosion on Render shared hosts (caps memory to free tier 512MB)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["CV_CPU_MAX_THREADS"] = "1"
+
 import logging
 import time
+import gc
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request

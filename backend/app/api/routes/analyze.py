@@ -1,5 +1,6 @@
 """Analysis API routes — main entry point for all fraud analysis."""
 
+import gc
 import logging
 import time
 import uuid
@@ -56,14 +57,32 @@ async def _run_analysis(
     if not any([file, text, url]):
         raise HTTPException(status_code=422, detail="Must provide a file, text, or URL.")
 
-    # 2. File validation
+    # 2. File validation & safe reading
     file_bytes = None
     filename = None
     if file:
         is_valid, error_msg = validate_file(file)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
-        file_bytes = await file.read()
+
+        # Read safely in 64KB chunks with 50MB absolute cap to protect RAM
+        max_upload_size = 50 * 1024 * 1024
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(65536)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > max_upload_size:
+                raise HTTPException(
+                    status_code=413,
+                    detail="File exceeds maximum allowed upload size (50 MB)."
+                )
+            chunks.append(chunk)
+
+        file_bytes = b"".join(chunks)
+        del chunks
         filename = file.filename
 
     # 3. Input classification
@@ -78,6 +97,15 @@ async def _run_analysis(
             status_code=400,
             detail="Unable to determine input type. Please upload a supported file or paste a URL/text.",
         )
+
+    # Modality-specific file size checks
+    if file_bytes:
+        if input_type in (InputType.IMAGE, InputType.QR) and len(file_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Image file exceeds maximum allowed limit of 10 MB.")
+        elif input_type in (InputType.PDF, InputType.DOCUMENT) and len(file_bytes) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Document file exceeds maximum allowed limit of 25 MB.")
+        elif input_type == InputType.AUDIO and len(file_bytes) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Audio file exceeds maximum allowed limit of 25 MB.")
 
     logger.info(f"Input classified as: {input_type.value}")
 
@@ -195,6 +223,9 @@ async def _run_analysis(
         f"Analysis complete: id={analysis_id}, type={input_type.value}, "
         f"score={r_score}, level={r_level.value}, time={proc_time:.0f}ms"
     )
+
+    # Release temporary buffers and free RAM on Render
+    gc.collect()
 
     return AnalysisResponse(
         analysis_id=analysis_id,

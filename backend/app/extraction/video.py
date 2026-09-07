@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 
 def sample_video_frames(
     video_bytes: bytes,
-    max_frames: int = 12,
-    sample_rate_sec: float = 2.0
+    max_frames: int = 4,
+    sample_rate_sec: float = 3.0
 ) -> Dict[str, Any]:
     """Saves video temporarily, extracts metadata and samples representative frames.
+    Downsamples frames to max 720p to preserve memory on 512MB RAM environments.
     Returns:
         {
             "metadata": {...},
@@ -27,6 +28,7 @@ def sample_video_frames(
             "error": str | None
         }
     """
+    import gc
     result = {
         "metadata": {},
         "frames": [],
@@ -74,16 +76,24 @@ def sample_video_frames(
                 break
 
             timestamp = round(current_frame / fps, 2)
-            # Encode frame to JPEG
-            success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+            # Resize frame to max 720p for memory preservation
+            if max(frame.shape[0], frame.shape[1]) > 720:
+                scale = 720.0 / max(frame.shape[0], frame.shape[1])
+                frame = cv2.resize(frame, (int(frame.shape[1] * scale), int(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+
+            # Encode frame to compact JPEG
+            success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
             if success:
                 sampled_frames.append((timestamp, buffer.tobytes()))
 
+            del frame
             current_frame += step_frames
             if current_frame >= total_frames:
                 break
 
         cap.release()
+        gc.collect()
         result["frames"] = sampled_frames
         result["frame_count"] = len(sampled_frames)
 
