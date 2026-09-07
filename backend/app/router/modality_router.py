@@ -161,12 +161,9 @@ class ModalityRouter:
             elif input_type == InputType.VIDEO:
                 # Step 1: Run video fraud analysis
                 vid_res = await self.video_detector.analyze(**kwargs)
-                detector_results.append(vid_res)
-                primary_res = vid_res
-                gc.collect()
-
-                # Step 2: Run AI media detection on sampled frames sequentially
-                raw_sampled = vid_res.metadata.get("sampled_frames", [])
+                
+                # Pop raw sampled frames from metadata so it does not fail PostgreSQL JSON serialization
+                raw_sampled = vid_res.metadata.pop("sampled_frames", [])
                 sampled_frames = []
                 for item in raw_sampled[:4]:
                     if isinstance(item, (tuple, list)) and len(item) >= 2:
@@ -174,6 +171,11 @@ class ModalityRouter:
                     elif isinstance(item, bytes):
                         sampled_frames.append(item)
 
+                detector_results.append(vid_res)
+                primary_res = vid_res
+                gc.collect()
+
+                # Step 2: Run AI media detection on sampled frames sequentially
                 ai_res = await self.ai_media_detector.analyze(frames_bytes=sampled_frames)
                 detector_results.append(ai_res)
                 if ai_res.metadata and "ai_media" in ai_res.metadata:

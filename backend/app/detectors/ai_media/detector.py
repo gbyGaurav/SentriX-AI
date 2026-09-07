@@ -55,9 +55,9 @@ def analyze_fft_spectrum(gray_img: np.ndarray) -> Tuple[float, bool]:
         center = (128, 128)
         dist_from_center = np.sqrt((x - center[0])**2 + (y - center[1])**2)
 
-        # Natural photographic images follow 1/f^alpha power distribution.
-        # Synthetic upsampling introduces discrete peaks in outer frequencies (r > 60).
-        outer_mask = (dist_from_center > 60) & (dist_from_center < 120)
+        # High frequency ring mask (excluding cardinal axes from rectilinear text/UI borders)
+        cardinal_cross = (np.abs(x - 128) <= 6) | (np.abs(y - 128) <= 6)
+        outer_mask = (dist_from_center > 60) & (dist_from_center < 120) & (~cardinal_cross)
         outer_mag = magnitude[outer_mask]
 
         if len(outer_mag) == 0:
@@ -235,33 +235,31 @@ class AIMediaDetector(FraudDetector):
             signals.append("High-frequency periodic spectral spikes typical of diffusion/GAN upsampling")
             ai_evidence.append("Frequency-domain periodic grid artifacts detected via 2D FFT")
 
-        if avg_noise_var < 0.75:
+        if avg_noise_var < 0.70 and avg_noise_var > 0.05 and avg_fft > 0.2:
             signals.append("Unnaturally low camera sensor noise variance (characteristic of synthetic rendering)")
             ai_evidence.append("Lack of physical optical sensor noise fingerprint")
-        elif avg_noise_var > 15.0 and avg_corr > 0.45:
+        elif avg_noise_var > 15.0 and avg_corr > 0.45 and avg_fft > 0.3:
             signals.append("Unnatural inter-channel residual noise correlation")
             ai_evidence.append("Abnormal color channel noise covariance")
 
         has_metadata_hit = any("generative AI" in s for s in signals)
 
         # Probabilistic classification based on calculated forensic signals
-        if has_metadata_hit or (fft_peaks_count > 0 and len(ai_evidence) >= 2 and not has_camera_hardware):
+        if has_metadata_hit:
             verdict = "LIKELY_AI_GENERATED"
-            confidence = round(float(np.clip(0.78 + avg_fft * 0.12, 0.78, 0.90)), 2)
+            confidence = round(float(np.clip(0.80 + avg_fft * 0.12, 0.78, 0.92)), 2)
+        elif fft_peaks_count > 0 and len(ai_evidence) >= 2 and not has_camera_hardware:
+            verdict = "LIKELY_AI_GENERATED"
+            confidence = round(float(np.clip(0.78 + avg_fft * 0.10, 0.76, 0.88)), 2)
         elif has_camera_hardware and not has_metadata_hit and (0.8 <= avg_noise_var <= 25.0):
             verdict = "LIKELY_AUTHENTIC"
             confidence = round(float(np.clip(0.78 + (1.0 - avg_fft) * 0.08, 0.76, 0.86)), 2)
             signals.append(f"Camera hardware EXIF verified: {camera_details}")
             ai_evidence.append(f"Camera hardware EXIF verified ({camera_details})")
             signals.append("Natural optical sensor noise variance and photographic EXIF signature observed")
-        elif fft_peaks_count > 0 or (avg_noise_var < 0.70 and avg_fft > 0.25):
+        elif fft_peaks_count > 0:
             verdict = "POSSIBLY_AI_GENERATED"
             confidence = round(float(np.clip(0.60 + avg_fft * 0.10, 0.60, 0.72)), 2)
-        elif is_video:
-            # For video streams without clear deepfake artifacts, default to INCONCLUSIVE
-            verdict = "INCONCLUSIVE"
-            confidence = 0.50
-            signals.append("Video frame consistency is inconclusive; insufficient distinct markers to definitively classify authenticity")
         else:
             verdict = "INCONCLUSIVE"
             confidence = 0.50
