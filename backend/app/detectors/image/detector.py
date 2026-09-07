@@ -110,28 +110,58 @@ class ImageDetector(FraudDetector):
                 score += 0.15
                 signals.append("Moderate compression inconsistencies detected across image regions")
 
-            # 3. OCR Text Extraction (for fraudulent text overlays, banners, fake receipts)
+            # 3. OCR Text Extraction & Fraud Content Evaluation
             ocr_text = extract_text_with_ocr(file_bytes)
             if ocr_text:
                 extracted_text = ocr_text
+                t_lower = ocr_text.lower()
                 signals.append(f"Text overlay detected via OCR ({len(ocr_text)} characters)")
+
+                # Analyze OCR text for scam/phishing signatures
+                has_urgency = any(w in t_lower for w in ['urgent', 'immediately', 'within 24 hours', 'blocked today', 'expired', 'warning'])
+                has_credentials = any(w in t_lower for w in ['otp', 'password', 'pin', 'pan', 'aadhaar', 'cvv', 'verify now'])
+                has_threat = any(w in t_lower for w in ['blocked', 'suspended', 'deactivated', 'legal action', 'police', 'arrest'])
+                has_lottery = any(w in t_lower for w in ['congratulations', 'winner', 'won', 'lottery', 'free iphone', '50,000', '₹', 'prize'])
+                has_payment = any(w in t_lower for w in ['pay now', 'processing fee', 'shipping fee', 'customs fee', 'upi', 'wire transfer'])
+
+                if (has_urgency or has_threat) and has_credentials:
+                    score = max(score, 0.80)
+                    signals.append("Image contains urgent account suspension warning demanding OTP/credentials")
+                elif 'kyc' in t_lower and ('pan' in t_lower or 'aadhaar' in t_lower or 'otp' in t_lower or has_threat):
+                    score = max(score, 0.78)
+                    signals.append("Image contains fake KYC verification alert demanding identity credentials")
+                elif has_lottery and (has_payment or 'click' in t_lower or 'claim' in t_lower):
+                    score = max(score, 0.72)
+                    signals.append("Image contains fake prize/lottery notification with payment or claim instructions")
+                elif any(p in t_lower for p in ['payment successful', 'transaction successful', 'paid to', 'upi ref', 'google pay', 'phonepe', 'paytm']):
+                    score = max(score, 0.40)
+                    signals.append("Image appears to be a digital payment receipt or transaction screenshot")
 
             # 4. Embedded QR code extraction
             qr_results = extract_qr_from_bytes(file_bytes)
             if qr_results:
                 extracted_qrs = [qr[0] for qr in qr_results]
                 signals.append(f"Found {len(extracted_qrs)} embedded QR code(s) inside image")
+                for q_text in extracted_qrs:
+                    if any(k in q_text.lower() for k in ['login', 'verify', 'account', 'pay', 'upi://', '.xyz', '.top']):
+                        score = max(score, 0.65)
+                        signals.append("Embedded QR code points to authentication or financial payload")
 
         except Exception as e:
             logger.error(f"Image analysis error: {e}", exc_info=True)
             return self._create_result(0.0, 0.5, [], (time.time() - start_t) * 1000, error=str(e))
 
+        if not signals:
+            score = 0.05
+            signals.append("Clean visual structure, uniform compression, and no fraudulent text overlays detected")
+
         final_score = min(1.0, max(0.0, score))
         proc_time = (time.time() - start_t) * 1000
+        confidence = 0.90 if len(signals) >= 2 else (0.85 if score > 0.1 else 0.92)
 
         return self._create_result(
             probability=final_score,
-            confidence=0.8,
+            confidence=confidence,
             signals=signals,
             processing_time_ms=proc_time,
             metadata={

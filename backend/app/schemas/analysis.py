@@ -31,6 +31,10 @@ class FraudType(str, Enum):
     IDENTITY_THEFT = 'IDENTITY_THEFT'
     FINANCIAL_FRAUD = 'FINANCIAL_FRAUD'
     MALWARE = 'MALWARE'
+    AI_GENERATED = 'AI_GENERATED'
+    SUSPICIOUS_QR = 'SUSPICIOUS_QR'
+    FAKE_DOCUMENT = 'FAKE_DOCUMENT'
+    SAFE = 'SAFE'
     UNKNOWN = 'UNKNOWN'
 
 class DetectorResult(BaseModel):
@@ -71,12 +75,28 @@ class AnalysisResponse(BaseModel):
     extracted_content: Dict[str, Any] = {}
     processing_time_ms: float
     created_at: str
-    disclaimer: str = 'SentriX provides AI-based risk assessment, not definitive proof of fraud. Always verify important information through an independent trusted source.'
+    disclaimer: str = 'SentriX provides an AI-assisted security assessment. It is not definitive proof of fraud. Always verify important information using an independent trusted source.'
+
+    # User-Friendly Practical Intelligence Fields
+    summary: str = ""
+    why_suspicious: List[str] = []
+    recommended_actions: List[str] = []
+    primary_threat: str = "UNKNOWN"
+    threats: List[str] = []
+    ai_media: Optional[Dict[str, Any]] = None
+    multimodal_findings: List[str] = []
 
     @model_validator(mode='after')
-    def ensure_id(self):
+    def ensure_id_and_fields(self):
         if not self.id and self.analysis_id:
             self.id = self.analysis_id
+        if not self.threats and self.fraud_types:
+            self.threats = [f.value.replace('_', ' ').title() for f in self.fraud_types if f != FraudType.UNKNOWN]
+        if self.primary_threat == "UNKNOWN" and self.threats:
+            self.primary_threat = self.threats[0]
+        elif not self.threats and self.risk_level == RiskLevel.SAFE:
+            self.primary_threat = "Safe / Clean"
+            self.threats = ["Safe / Clean"]
         return self
 
 class HistoryItem(BaseModel):

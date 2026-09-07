@@ -38,6 +38,10 @@ async def test_analyze_direct_text():
         data = res.json()
         assert data["input_type"] == "TEXT"
         assert data["risk_score"] > 40
+        assert "summary" in data and len(data["summary"]) > 0
+        assert "why_suspicious" in data
+        assert "recommended_actions" in data
+        assert "multimodal_findings" in data
 
 
 @pytest.mark.asyncio
@@ -51,7 +55,12 @@ async def test_history_and_get_by_id():
         # Retrieve by id
         res2 = await client.get(f"/api/analysis/{analysis_id}")
         assert res2.status_code == 200
-        assert res2.json()["analysis_id"] == analysis_id
+        data2 = res2.json()
+        assert data2["analysis_id"] == analysis_id
+        assert "summary" in data2 and len(data2["summary"]) > 0
+        assert "why_suspicious" in data2
+        assert "recommended_actions" in data2
+        assert "multimodal_findings" in data2
 
         # List history
         res3 = await client.get("/api/history?page=1&page_size=5")

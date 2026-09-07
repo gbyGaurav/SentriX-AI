@@ -119,6 +119,17 @@ async def _run_analysis(
     )
     all_signals = [s for d in det_results for s in d.signals]
     recommendations = explainer.generate_recommendations(r_level, f_types, all_signals)
+    summary = explainer.generate_summary(r_score, r_level, f_types, input_type)
+    why_suspicious = explainer.generate_why_suspicious(det_results, ev_items, f_types, r_level)
+    multimodal_findings = explainer.generate_multimodal_findings(ev_items, det_results, ext_content)
+
+    ai_media = None
+    for d in det_results:
+        if d.metadata and "ai_media" in d.metadata:
+            ai_media = d.metadata["ai_media"]
+            break
+    if not ai_media and "ai_media" in ext_content:
+        ai_media = ext_content["ai_media"]
 
     # 8. Save to database
     proc_time = (time.time() - start_t) * 1000
@@ -200,6 +211,11 @@ async def _run_analysis(
         extracted_content=ext_content,
         processing_time_ms=proc_time,
         created_at=now.isoformat() + "Z",
+        summary=summary,
+        why_suspicious=why_suspicious,
+        recommended_actions=recommendations,
+        ai_media=ai_media,
+        multimodal_findings=multimodal_findings,
     )
 
 
@@ -288,8 +304,75 @@ async def get_analysis(analysis_id: str, db: AsyncSession = Depends(get_db)):
             for ev in db_a.evidences
         ],
         explanation=db_a.explanation,
-        recommendations=db_a.recommendations,
-        extracted_content=db_a.extracted_content,
+        recommendations=db_a.recommendations or [],
+        extracted_content=db_a.extracted_content or {},
         processing_time_ms=db_a.processing_time_ms,
         created_at=db_a.created_at.isoformat() + "Z" if not db_a.created_at.isoformat().endswith("Z") else db_a.created_at.isoformat(),
+        summary=explainer.generate_summary(
+            db_a.risk_score,
+            RiskLevel(db_a.risk_level) if isinstance(db_a.risk_level, str) else db_a.risk_level,
+            [FraudType(f) if isinstance(f, str) else f for f in db_a.fraud_types],
+            InputType(db_a.input_type)
+        ),
+        why_suspicious=explainer.generate_why_suspicious(
+            [
+                DetectorResult(
+                    module=d.module,
+                    fraud_probability=d.fraud_probability,
+                    confidence=d.confidence,
+                    risk=RiskLevel(d.risk) if isinstance(d.risk, str) else d.risk,
+                    signals=d.signals,
+                    model_version=d.model_version,
+                    processing_time_ms=d.processing_time_ms,
+                    metadata=d.metadata_,
+                )
+                for d in db_a.detectors
+            ],
+            [
+                EvidenceItem(
+                    evidence_type=ev.evidence_type,
+                    source_modality=ev.source_modality,
+                    target_modality=ev.target_modality,
+                    content=ev.content,
+                    severity=ev.severity,
+                    relationship=ev.evidence_relationship,
+                )
+                for ev in db_a.evidences
+            ],
+            [FraudType(f) if isinstance(f, str) else f for f in db_a.fraud_types],
+            RiskLevel(db_a.risk_level) if isinstance(db_a.risk_level, str) else db_a.risk_level,
+        ),
+        recommended_actions=db_a.recommendations or [],
+        ai_media=(
+            next((d.metadata_.get("ai_media") for d in db_a.detectors if d.metadata_ and "ai_media" in d.metadata_), None)
+            or (db_a.extracted_content.get("ai_media") if db_a.extracted_content else None)
+        ),
+        multimodal_findings=explainer.generate_multimodal_findings(
+            [
+                EvidenceItem(
+                    evidence_type=ev.evidence_type,
+                    source_modality=ev.source_modality,
+                    target_modality=ev.target_modality,
+                    content=ev.content,
+                    severity=ev.severity,
+                    relationship=ev.evidence_relationship,
+                )
+                for ev in db_a.evidences
+            ],
+            [
+                DetectorResult(
+                    module=d.module,
+                    fraud_probability=d.fraud_probability,
+                    confidence=d.confidence,
+                    risk=RiskLevel(d.risk) if isinstance(d.risk, str) else d.risk,
+                    signals=d.signals,
+                    model_version=d.model_version,
+                    processing_time_ms=d.processing_time_ms,
+                    metadata=d.metadata_,
+                )
+                for d in db_a.detectors
+            ],
+            db_a.extracted_content or {},
+        ),
     )
+

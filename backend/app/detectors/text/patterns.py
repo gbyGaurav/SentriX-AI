@@ -22,6 +22,7 @@ CREDENTIAL_PATTERNS = [
     'verify your account', 'sign in to confirm', 'login to verify',
     'share your', 'send your', 'aadhaar', 'pan card', 'passport number',
     'driver\'s license', 'tax id', 'taxpayer', 'user id', 'username and password',
+    'kyc', 'kyc expired', 'update kyc', 'complete kyc', 'pan number', 'aadhaar card',
 ]
 
 FINANCIAL_PATTERNS = [
@@ -36,6 +37,8 @@ FINANCIAL_PATTERNS = [
     'google pay', 'phonepe', 'paytm', 'direct deposit', 'routing number',
     'forex', 'binary options', 'high yield', 'risk free investment',
     'minimum deposit', 'trading signal', 'guaranteed profit',
+    'shipping fee', 'courier fee', 'delivery fee', '₹', 'rs.', 'inr', 'rupees',
+    'free iphone', 'cash prize', '50,000', '499',
 ]
 
 THREAT_PATTERNS = [

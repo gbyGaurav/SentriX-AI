@@ -49,8 +49,8 @@ class QRDetector(FraudDetector):
 
         # Multiple QRs in one image is often used in quishing or redirection tricks
         if len(decoded_items) > 1:
-            score += 0.2
-            signals.append(f"Multiple QR codes found ({len(decoded_items)}), potential quishing ambiguity")
+            score += 0.25
+            signals.append(f"Multiple QR codes found ({len(decoded_items)}), potential quishing evasion attempt")
 
         for payload, meta in decoded_items:
             extracted_payloads.append(payload)
@@ -61,34 +61,67 @@ class QRDetector(FraudDetector):
             if is_url:
                 full_url = payload if payload.startswith("http") else f"https://{payload}"
                 extracted_urls.append(full_url)
-                signals.append(f"QR decodes to URL: {full_url[:60]}...")
-            
+                signals.append(f"QR decodes to web URL: {full_url[:60]}...")
+
+                # Deep URL heuristic inline check
+                try:
+                    from app.detectors.url.features import extract_url_features
+                    url_feat = extract_url_features(full_url)
+                    if url_feat.has_suspicious_tld:
+                        score = max(score + 0.35, 0.70)
+                        signals.append("QR redirects to high-risk top-level domain (.xyz, .top, etc.)")
+                    if url_feat.typosquatting_brand:
+                        score = max(score + 0.45, 0.80)
+                        signals.append(f"QR destination imitates trusted brand: {url_feat.typosquatting_brand.upper()}")
+                    elif url_feat.brand_impersonation_score > 0:
+                        score = max(score + 0.30, 0.65)
+                        signals.append("QR destination displays brand impersonation indicators")
+                    if url_feat.has_suspicious_path or url_feat.has_urgency_parameter:
+                        score = max(score + 0.30, 0.72)
+                        signals.append("QR destination points to sensitive login or account verification page")
+                    if url_feat.is_url_shortener:
+                        score += 0.20
+                        signals.append("QR uses a URL shortener to hide destination website")
+                except Exception as e:
+                    pass
+
             # Check for suspicious schemes
             if p_lower.startswith(("data:", "javascript:", "vbscript:", "file:")):
-                score += 0.5
-                signals.append(f"Dangerous URI scheme in QR: {p_lower[:15]}")
-            
+                score = max(score + 0.50, 0.85)
+                signals.append(f"Dangerous script/URI scheme in QR: {p_lower[:15]}")
+
             # Check for payment requests (UPI, Crypto, etc.)
-            if p_lower.startswith(("upi://", "bitcoin:", "ethereum:", "solana:")):
-                score += 0.35
-                signals.append("QR directs to immediate payment or cryptocurrency transfer")
+            if p_lower.startswith("upi://pay"):
+                score = max(score, 0.45)
+                signals.append("QR encodes an immediate UPI payment request")
+                if any(w in p_lower for w in ["cashback", "reward", "prize", "refund", "win", "gift"]):
+                    score = max(score + 0.40, 0.88)
+                    signals.append("Rogue payment trap: Disguising payment debit request as a cashback/reward claim")
+            elif p_lower.startswith(("bitcoin:", "ethereum:", "solana:")):
+                score = max(score + 0.35, 0.65)
+                signals.append("QR directs to direct cryptocurrency transfer")
 
             # Check for credential login endpoints
             if any(k in p_lower for k in ["login", "signin", "verify", "auth", "pwd", "password", "bank"]):
-                score += 0.25
-                signals.append("QR payload targets authentication / credential verification")
+                score = max(score + 0.30, 0.65)
+                signals.append("QR payload targets authentication or credential verification")
 
             # Obfuscated / IP address payload
             if re.search(r'https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', p_lower):
-                score += 0.3
-                signals.append("QR encodes an IP-based destination (high evasion risk)")
+                score = max(score + 0.35, 0.75)
+                signals.append("QR encodes a direct numeric IP destination (evasion technique)")
+
+        if not signals:
+            score = 0.05
+            signals.append(f"Clean QR code decoded successfully ({decoded_items[0][0][:40]}...)")
 
         final_score = min(1.0, max(0.0, score))
         proc_time = (time.time() - start_t) * 1000
+        confidence = 0.90 if len(signals) >= 2 else (0.85 if score > 0.1 else 0.90)
 
         return self._create_result(
             probability=final_score,
-            confidence=0.85,
+            confidence=confidence,
             signals=signals,
             processing_time_ms=proc_time,
             metadata={

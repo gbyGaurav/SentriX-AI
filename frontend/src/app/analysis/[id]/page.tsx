@@ -108,6 +108,13 @@ export default function AnalysisPage() {
             explanation={analysis.explanation}
             recommendations={analysis.recommendations}
             fraudTypes={analysis.fraud_types}
+            summary={analysis.summary}
+            whySuspicious={analysis.why_suspicious}
+            recommendedActions={analysis.recommended_actions}
+            multimodalFindings={analysis.multimodal_findings}
+            primaryThreat={analysis.primary_threat}
+            threats={analysis.threats}
+            aiMedia={analysis.ai_media}
           />
         </div>
       </div>

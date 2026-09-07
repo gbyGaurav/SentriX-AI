@@ -9,12 +9,14 @@ interface Props {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  url_fraud: 'URL Analysis',
-  text_fraud: 'Text / NLP Analysis',
+  url_fraud: 'URL & Link Analysis',
+  text_fraud: 'Text & Social Engineering',
+  spam_fraud: 'Spam & Scam Classifier',
   qr_fraud: 'QR Code Analysis',
   document_fraud: 'Document Analysis',
-  image_fraud: 'Image Analysis',
-  video_fraud: 'Video Analysis',
+  image_fraud: 'Image Forensics & OCR',
+  ai_media: 'AI Media & Authenticity',
+  video_fraud: 'Video Forensics',
   audio_fraud: 'Audio Analysis',
 };
 
@@ -22,27 +24,36 @@ export default function DetectorResultCard({ result }: Props) {
   const [expanded, setExpanded] = useState(false);
   const pct = Math.round(result.fraud_probability * 100);
 
+  const statusLabel =
+    pct >= 70 ? 'High Risk' :
+    pct >= 40 ? 'Suspicious' :
+    pct >= 20 ? 'Low Concern' : 'Clean';
+
   const barColor =
-    pct <= 20 ? 'bg-emerald-500' :
-    pct <= 40 ? 'bg-yellow-500' :
-    pct <= 60 ? 'bg-orange-500' :
-    pct <= 80 ? 'bg-red-500' : 'bg-rose-600';
+    pct <= 19 ? 'bg-emerald-500' :
+    pct <= 39 ? 'bg-yellow-500' :
+    pct <= 69 ? 'bg-orange-500' :
+    pct <= 84 ? 'bg-red-500' : 'bg-rose-600';
 
   return (
     <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 p-5 hover:border-slate-600 transition-all">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-white font-semibold text-base">
-          {MODULE_LABELS[result.module] ?? result.module}
-        </h4>
+        <div>
+          <h4 className="text-white font-semibold text-base">
+            {MODULE_LABELS[result.module] ?? result.module}
+          </h4>
+          <span className="text-[11px] text-slate-400">Status: {statusLabel}</span>
+        </div>
         <RiskBadge level={result.risk} />
       </div>
 
       {/* Probability bar */}
       <div className="mb-3">
         <div className="flex justify-between text-xs text-slate-400 mb-1">
-          <span>Fraud Probability</span>
+          <span>Risk Indicator</span>
           <span className="font-mono">{pct}%</span>
         </div>
+
         <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-700 ease-out ${barColor}`}

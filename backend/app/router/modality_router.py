@@ -29,6 +29,8 @@ class ModalityRouter:
         from app.detectors.image.detector import ImageDetector
         from app.detectors.video.detector import VideoDetector
         from app.detectors.audio.detector import AudioDetector
+        from app.detectors.spam.detector import SpamDetector
+        from app.detectors.ai_media.detector import AIMediaDetector
 
         self.url_detector = URLDetector()
         self.text_detector = TextDetector()
@@ -37,6 +39,8 @@ class ModalityRouter:
         self.image_detector = ImageDetector()
         self.video_detector = VideoDetector()
         self.audio_detector = AudioDetector()
+        self.spam_detector = SpamDetector()
+        self.ai_media_detector = AIMediaDetector()
 
         self.detectors = {
             InputType.URL: self.url_detector,
@@ -80,8 +84,74 @@ class ModalityRouter:
 
         # 1. Primary analysis execution
         try:
-            primary_res = await primary_detector.analyze(**kwargs)
-            detector_results.append(primary_res)
+            # If text or email, run both text detector and spam detector concurrently
+            if input_type in (InputType.TEXT, InputType.EMAIL):
+                t_res, s_res = await asyncio.gather(
+                    self.text_detector.analyze(**kwargs),
+                    self.spam_detector.analyze(**kwargs),
+                    return_exceptions=True
+                )
+                if isinstance(t_res, DetectorResult):
+                    detector_results.append(t_res)
+                    primary_res = t_res
+                else:
+                    logger.error(f"Text detector failed: {t_res}")
+                    primary_res = None
+
+                if isinstance(s_res, DetectorResult):
+                    detector_results.append(s_res)
+
+                if not primary_res:
+                    return detector_results, [], {}
+
+            # If image, run image detector and AI media detector concurrently
+            elif input_type == InputType.IMAGE:
+                img_res, ai_res = await asyncio.gather(
+                    self.image_detector.analyze(**kwargs),
+                    self.ai_media_detector.analyze(file_bytes=file_bytes),
+                    return_exceptions=True
+                )
+                if isinstance(img_res, DetectorResult):
+                    detector_results.append(img_res)
+                    primary_res = img_res
+                else:
+                    logger.error(f"Image detector failed: {img_res}")
+                    primary_res = None
+
+                if isinstance(ai_res, DetectorResult):
+                    detector_results.append(ai_res)
+                    if ai_res.metadata and "ai_media" in ai_res.metadata:
+                        extracted_content["ai_media"] = ai_res.metadata["ai_media"]
+
+                if not primary_res:
+                    return detector_results, [], {}
+
+            # If video, run video detector and AI media detector concurrently
+            elif input_type == InputType.VIDEO:
+                vid_res, ai_res = await asyncio.gather(
+                    self.video_detector.analyze(**kwargs),
+                    self.ai_media_detector.analyze(file_bytes=file_bytes),
+                    return_exceptions=True
+                )
+                if isinstance(vid_res, DetectorResult):
+                    detector_results.append(vid_res)
+                    primary_res = vid_res
+                else:
+                    logger.error(f"Video detector failed: {vid_res}")
+                    primary_res = None
+
+                if isinstance(ai_res, DetectorResult):
+                    detector_results.append(ai_res)
+                    if ai_res.metadata and "ai_media" in ai_res.metadata:
+                        extracted_content["ai_media"] = ai_res.metadata["ai_media"]
+
+                if not primary_res:
+                    return detector_results, [], {}
+
+            else:
+                primary_res = await primary_detector.analyze(**kwargs)
+                detector_results.append(primary_res)
+
         except Exception as e:
             logger.error(f"Primary detector error ({primary_detector.module_name}): {e}", exc_info=True)
             return [], [], {}
@@ -93,6 +163,17 @@ class ModalityRouter:
         extracted_qrs = list(meta.get("extracted_qrs", []))
         extracted_emails = list(meta.get("extracted_emails", []))
         extracted_phones = list(meta.get("extracted_phones", []))
+
+        # Check secondary detectors for additional metadata
+        for det in detector_results:
+            if det.metadata:
+                for u in det.metadata.get("extracted_urls", []):
+                    if u not in extracted_urls:
+                        extracted_urls.append(u)
+                if not extracted_text and det.metadata.get("extracted_text"):
+                    extracted_text = det.metadata.get("extracted_text")
+                if "ai_media" in det.metadata and "ai_media" not in extracted_content:
+                    extracted_content["ai_media"] = det.metadata["ai_media"]
 
         # Save to extracted content dictionary
         if extracted_text:
@@ -126,7 +207,7 @@ class ModalityRouter:
             cascade_tasks.append(self.qr_detector.analyze(qr_content=qr_data))
             task_tags.append(("QR", qr_data))
 
-        # (b) If Document / Image OCR / Video OCR found text -> Cascade to Text Detector
+        # (b) If Document / Image OCR / Video OCR found text -> Cascade to Text AND Spam Detector
         if extracted_text and input_type not in (InputType.TEXT, InputType.EMAIL):
             evidence_graph.add_relationship(
                 source=input_type.value,
@@ -138,6 +219,9 @@ class ModalityRouter:
             cascade_tasks.append(self.text_detector.analyze(text=extracted_text))
             task_tags.append(("TEXT", extracted_text))
 
+            cascade_tasks.append(self.spam_detector.analyze(text=extracted_text))
+            task_tags.append(("SPAM", extracted_text))
+
         # (c) If Primary or QR directly yielded URLs -> Cascade to URL Detector
         seen_urls = set()
         for u in extracted_urls:
@@ -148,7 +232,7 @@ class ModalityRouter:
                     relationship="contains_url",
                     target="URL",
                     content=u,
-                    severity="warning" if ("login" in u.lower() or "verify" in u.lower()) else "info"
+                    severity="warning" if any(k in u.lower() for k in ("login", "verify", "pay", "bank")) else "info"
                 )
                 cascade_tasks.append(self.url_detector.analyze(url=u))
                 task_tags.append(("URL", u))
@@ -179,3 +263,4 @@ class ModalityRouter:
                                 logger.debug(f"Secondary URL analysis error: {e}")
 
         return detector_results, evidence_graph.get_evidence_summary(), extracted_content
+

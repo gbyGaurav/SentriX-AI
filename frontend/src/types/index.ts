@@ -2,7 +2,21 @@ export type InputType = 'URL' | 'QR' | 'IMAGE' | 'VIDEO' | 'PDF' | 'DOCUMENT' | 
 
 export type RiskLevel = 'SAFE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
-export type FraudType = 'PHISHING' | 'SCAM' | 'SPAM' | 'SOCIAL_ENGINEERING' | 'DEEPFAKE' | 'DOCUMENT_FRAUD' | 'IDENTITY_THEFT' | 'FINANCIAL_FRAUD' | 'MALWARE' | 'UNKNOWN';
+export type FraudType =
+  | 'PHISHING'
+  | 'SCAM'
+  | 'SPAM'
+  | 'SOCIAL_ENGINEERING'
+  | 'DEEPFAKE'
+  | 'DOCUMENT_FRAUD'
+  | 'IDENTITY_THEFT'
+  | 'FINANCIAL_FRAUD'
+  | 'MALWARE'
+  | 'AI_GENERATED'
+  | 'SUSPICIOUS_QR'
+  | 'FAKE_DOCUMENT'
+  | 'SAFE'
+  | 'UNKNOWN';
 
 export interface DetectorResult {
   module: string;
@@ -25,6 +39,13 @@ export interface EvidenceItem {
   relationship: string | null;
 }
 
+export interface AIMediaResult {
+  result: 'LIKELY_AI_GENERATED' | 'POSSIBLY_AI_GENERATED' | 'LIKELY_AUTHENTIC' | 'INCONCLUSIVE';
+  confidence: number;
+  evidence: string[];
+  disclaimer: string;
+}
+
 export interface AnalysisResponse {
   analysis_id: string;
   id?: string;
@@ -41,6 +62,15 @@ export interface AnalysisResponse {
   processing_time_ms: number;
   created_at: string;
   disclaimer: string;
+
+  // New Practical User-Friendly Fields
+  summary?: string;
+  why_suspicious?: string[];
+  recommended_actions?: string[];
+  primary_threat?: string;
+  threats?: string[];
+  ai_media?: AIMediaResult | null;
+  multimodal_findings?: string[];
 }
 
 export interface HistoryItem {
