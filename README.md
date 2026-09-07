@@ -1,4 +1,4 @@
-# UAMD — Unified AI Multimodal Fraud Intelligence Framework
+# SentriX — Unified Multimodal Fraud Intelligence Framework
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com)
@@ -6,7 +6,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38bdf8.svg)](https://tailwindcss.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An enterprise-grade, upload-anything multimodal fraud detection and intelligence platform. Users paste or drop any suspicious artifact — URLs, QR codes, documents, images, video, text, or audio — and UAMD automatically classifies, extracts, analyzes, fuses evidence, and produces explainable risk intelligence with safe protective recommendations.
+An enterprise-grade, upload-anything multimodal fraud detection and intelligence platform. Users paste or drop any suspicious artifact — URLs, QR codes, documents, images, video, text, or audio — and SentriX automatically classifies, extracts, analyzes, fuses evidence, and produces explainable risk intelligence with safe protective recommendations.
 
 ---
 
@@ -24,7 +24,7 @@ Traditional detection solutions are fragmented — security teams and end-users 
 
 ## 2. Solution
 
-UAMD implements an **Upload-Anything** architecture following the paradigm:
+SentriX implements an **Upload-Anything** architecture following the paradigm:
 
 $$\text{UPLOAD} \longrightarrow \text{UNDERSTAND} \longrightarrow \text{ANALYZE} \longrightarrow \text{FUSE} \longrightarrow \text{EXPLAIN} \longrightarrow \text{PROTECT}$$
 
@@ -185,7 +185,7 @@ $$\text{Score} = \min\left(100, \, \lfloor P_{\text{fused}} \cdot 100 \rfloor + 
 ## 9. Project Structure
 
 ```text
-uamd/
+sentrix/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
@@ -323,4 +323,4 @@ All tests validate:
 
 ## 15. Responsible AI Disclaimer
 
-> **IMPORTANT**: UAMD provides AI-based risk assessment, not definitive legal proof of fraud. Attack vectors evolve continuously. Always verify critical requests (such as fund transfers or credential updates) through independent trusted channels.
+> **IMPORTANT**: SentriX provides AI-based risk assessment, not definitive legal proof of fraud. Attack vectors evolve continuously. Always verify critical requests (such as fund transfers or credential updates) through independent trusted channels.

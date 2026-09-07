@@ -70,7 +70,7 @@ class AnalysisResponse(BaseModel):
     extracted_content: Dict[str, Any] = {}
     processing_time_ms: float
     created_at: str
-    disclaimer: str = 'UAMD provides AI-based risk assessment, not definitive proof of fraud. Always verify important information through an independent trusted source.'
+    disclaimer: str = 'SentriX provides AI-based risk assessment, not definitive proof of fraud. Always verify important information through an independent trusted source.'
 
 class HistoryItem(BaseModel):
     analysis_id: str

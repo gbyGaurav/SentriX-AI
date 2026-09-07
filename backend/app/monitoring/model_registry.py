@@ -20,7 +20,7 @@ class RegisteredModel:
 
 
 class ModelRegistry:
-    """Central registry of all multimodal fraud detectors in UAMD."""
+    """Central registry of all multimodal fraud detectors in SentriX."""
 
     def __init__(self):
         self._models: Dict[str, RegisteredModel] = {}

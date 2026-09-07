@@ -3,18 +3,18 @@ version: '3.8'
 services:
   db:
     image: postgres:16-alpine
-    container_name: uamd-postgres
+    container_name: sentrix-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: uamd_user
-      POSTGRES_PASSWORD: uamd_password
-      POSTGRES_DB: uamd_db
+      POSTGRES_USER: sentrix_user
+      POSTGRES_PASSWORD: sentrix_password
+      POSTGRES_DB: sentrix_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U uamd_user -d uamd_db"]
+      test: ["CMD-SHELL", "pg_isready -U sentrix_user -d sentrix_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,15 +23,15 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: uamd-backend
+    container_name: sentrix-backend
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://uamd_user:uamd_password@db:5432/uamd_db
-      DATABASE_URL_SYNC: postgresql://uamd_user:uamd_password@db:5432/uamd_db
-      ALLOWED_ORIGINS: http://localhost:3000,https://uamd.vercel.app
+      DATABASE_URL: postgresql+asyncpg://sentrix_user:sentrix_password@db:5432/sentrix_db
+      DATABASE_URL_SYNC: postgresql://sentrix_user:sentrix_password@db:5432/sentrix_db
+      ALLOWED_ORIGINS: http://localhost:3000,https://sentrix-ai.vercel.app
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
@@ -45,7 +45,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: uamd-frontend
+    container_name: sentrix-frontend
     restart: unless-stopped
     depends_on:
       - backend

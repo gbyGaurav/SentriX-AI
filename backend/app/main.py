@@ -25,7 +25,7 @@ APP_START_TIME = time.time()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
-    logger.info("Starting UAMD API...")
+    logger.info("Starting SentriX API...")
     logger.info(f"Allowed origins: {settings.allowed_origins_list}")
     logger.info(f"LLM enabled: {settings.ENABLE_LLM}")
     logger.info(f"Audio processing: {settings.ENABLE_AUDIO_PROCESSING}")
@@ -36,12 +36,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("Shutting down UAMD API.")
+    logger.info("Shutting down SentriX API.")
 
 
 app = FastAPI(
-    title="UAMD API",
-    description="Unified AI Multimodal Fraud Intelligence Framework — "
+    title="SentriX API",
+    description="SentriX — Unified Multimodal Fraud Intelligence Framework: "
     "Upload anything suspicious and get an AI-powered risk assessment.",
     version="1.0.0",
     lifespan=lifespan,

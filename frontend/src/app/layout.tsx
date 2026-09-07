@@ -7,8 +7,8 @@ import Footer from '../components/Footer';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'UAMD — Unified AI Multimodal Fraud Intelligence',
-  description: 'Advanced multimodal AI fraud detection and intelligence framework.',
+  title: 'SentriX — Unified Multimodal Fraud Intelligence Framework',
+  description: 'Enterprise multimodal AI fraud detection and intelligence framework.',
 };
 
 export default function RootLayout({
