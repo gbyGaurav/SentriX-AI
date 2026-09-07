@@ -47,6 +47,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database init during startup deferred or encountered error: {e}. App will proceed.")
 
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        RapidOCR(use_cls=False, max_side_len=1024)
+        logger.info("RapidOCR initialized successfully.")
+    except Exception as e:
+        logger.warning(f"RapidOCR warm-up skipped: {e}")
+
     yield
 
     logger.info("Shutting down SentriX API.")
