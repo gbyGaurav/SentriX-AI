@@ -21,7 +21,7 @@ from app.extraction.qr import extract_qr_from_bytes
 logger = logging.getLogger(__name__)
 
 KNOWN_EDITING_SOFTWARE = [
-    "photoshop", "gimp", "canva", "picsart", "lightroom", "pixlr", "snapseed", "midjourney", "stable diffusion", "dall-e"
+    "photoshop", "gimp", "picsart", "pixlr"
 ]
 
 
@@ -121,8 +121,8 @@ class ImageDetector(FraudDetector):
                     val_lower = val_str.lower()
                     for sw in KNOWN_EDITING_SOFTWARE:
                         if sw in val_lower:
-                            score += 0.35
-                            signals.append(f"Image metadata indicates editing/generation software: '{sw}'")
+                            score += 0.10
+                            signals.append(f"Image metadata indicates editing software: '{sw}'")
                 metadata["exif"] = exif_dict
             else:
                 signals.append("Image EXIF metadata is completely stripped")

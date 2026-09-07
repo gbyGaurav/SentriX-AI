@@ -26,7 +26,8 @@ async def get_history(page: int = Query(1, ge=1), page_size: int = Query(20, ge=
             risk_level=a.risk_level,
             fraud_types=a.fraud_types,
             processing_time_ms=a.processing_time_ms,
-            created_at=a.created_at.isoformat() + 'Z'
+            created_at=a.created_at.isoformat() + 'Z',
+            ai_media=(a.extracted_content or {}).get("ai_media")
         ) for a in analyses
     ]
     

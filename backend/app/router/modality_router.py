@@ -166,7 +166,14 @@ class ModalityRouter:
                 gc.collect()
 
                 # Step 2: Run AI media detection on sampled frames sequentially
-                sampled_frames = [f[1] for f in vid_res.metadata.get("sampled_frames", [])[:2]]
+                raw_sampled = vid_res.metadata.get("sampled_frames", [])
+                sampled_frames = []
+                for item in raw_sampled[:4]:
+                    if isinstance(item, (tuple, list)) and len(item) >= 2:
+                        sampled_frames.append(item[1])
+                    elif isinstance(item, bytes):
+                        sampled_frames.append(item)
+
                 ai_res = await self.ai_media_detector.analyze(frames_bytes=sampled_frames)
                 detector_results.append(ai_res)
                 if ai_res.metadata and "ai_media" in ai_res.metadata:

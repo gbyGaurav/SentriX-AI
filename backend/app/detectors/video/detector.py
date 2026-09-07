@@ -34,8 +34,8 @@ class VideoDetector(FraudDetector):
         if not file_bytes:
             return self._create_result(0.0, 1.0, [], 0.0, error="No video content provided")
 
-        # 1. Sample frames and extract video metadata
-        sampled = sample_video_frames(file_bytes, max_frames=12, sample_rate_sec=1.5)
+        # 1. Sample frames and extract video metadata (max 4 keyframes to maintain 512MB RAM budget)
+        sampled = sample_video_frames(file_bytes, max_frames=4, sample_rate_sec=2.0)
         if sampled.get("error"):
             return self._create_result(
                 probability=0.0,
@@ -128,6 +128,7 @@ class VideoDetector(FraudDetector):
             metadata={
                 "frames_analyzed": frames_analyzed,
                 "video_metadata": metadata,
+                "sampled_frames": [f[1] for f in frames[:4]],
                 "extracted_texts": extracted_texts,
                 "extracted_urls": extracted_urls,
             }

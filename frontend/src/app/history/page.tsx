@@ -142,6 +142,7 @@ export default function HistoryPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Score</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Level</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">AI Authenticity</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Threats</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
                 </tr>
@@ -166,6 +167,31 @@ export default function HistoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <RiskBadge level={item.risk_level} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {item.ai_media ? (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${
+                            item.ai_media.result === 'LIKELY_AI_GENERATED'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : item.ai_media.result === 'POSSIBLY_AI_GENERATED'
+                              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                              : item.ai_media.result === 'LIKELY_AUTHENTIC'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}
+                        >
+                          {item.ai_media.result === 'LIKELY_AI_GENERATED'
+                            ? '🤖 LIKELY AI'
+                            : item.ai_media.result === 'POSSIBLY_AI_GENERATED'
+                            ? '🤖 POSSIBLY AI'
+                            : item.ai_media.result === 'LIKELY_AUTHENTIC'
+                            ? '📷 AUTHENTIC'
+                            : '⚪ INCONCLUSIVE'}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">

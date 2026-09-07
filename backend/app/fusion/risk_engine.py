@@ -49,10 +49,6 @@ class RiskEngine:
         'gift card': FraudType.FINANCIAL_FRAUD,
         'cryptocurrency': FraudType.FINANCIAL_FRAUD,
         'deepfake': FraudType.DEEPFAKE,
-        'ai_media': FraudType.AI_GENERATED,
-        'synthetic': FraudType.AI_GENERATED,
-        'spectral': FraudType.AI_GENERATED,
-        'generative ai': FraudType.AI_GENERATED,
         'qr': FraudType.SUSPICIOUS_QR,
         'document': FraudType.DOCUMENT_FRAUD,
         'spam': FraudType.SPAM,
@@ -75,8 +71,8 @@ class RiskEngine:
         # Base score from fused probability
         score = int(round(fused_probability * 100))
 
-        # Bonus for multiple detectors agreeing on high risk
-        high_risk_detectors = [d for d in detector_results if d.fraud_probability > 0.55]
+        # Bonus for multiple fraud detectors agreeing on high risk (excluding ai_media authenticity check)
+        high_risk_detectors = [d for d in detector_results if d.module != 'ai_media' and d.fraud_probability > 0.55]
         if len(high_risk_detectors) > 1:
             agreement_bonus = min(15, len(high_risk_detectors) * 5)
             score = min(100, score + agreement_bonus)
@@ -111,11 +107,11 @@ class RiskEngine:
         return score, level, fraud_types, fused_confidence
 
     def _detect_fraud_types(self, detector_results: List[DetectorResult]) -> List[FraudType]:
-        """Infer fraud types from detector signals."""
+        """Infer fraud types from detector signals (excluding ai_media authenticity check)."""
         detected = set()
 
         for det in detector_results:
-            if det.fraud_probability < 0.35:
+            if det.module == 'ai_media' or det.fraud_probability < 0.35:
                 continue
 
             # Module-based type inference
@@ -127,9 +123,6 @@ class RiskEngine:
 
             if det.module == 'spam_fraud' and det.fraud_probability >= 0.35:
                 detected.add(FraudType.SPAM)
-
-            if det.module == 'ai_media' and det.fraud_probability >= 0.45:
-                detected.add(FraudType.AI_GENERATED)
 
             if det.module == 'qr_fraud' and det.fraud_probability >= 0.40:
                 detected.add(FraudType.SUSPICIOUS_QR)

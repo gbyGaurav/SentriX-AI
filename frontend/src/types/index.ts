@@ -81,6 +81,7 @@ export interface HistoryItem {
   fraud_types: FraudType[];
   processing_time_ms: number;
   created_at: string;
+  ai_media?: AIMediaResult | null;
 }
 
 export interface HistoryResponse {

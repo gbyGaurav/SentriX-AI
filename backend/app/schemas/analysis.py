@@ -107,6 +107,7 @@ class HistoryItem(BaseModel):
     fraud_types: List[FraudType]
     processing_time_ms: float
     created_at: str
+    ai_media: Optional[Dict[str, Any]] = None
 
 class HistoryResponse(BaseModel):
     items: List[HistoryItem]

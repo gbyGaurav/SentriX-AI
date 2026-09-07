@@ -1,9 +1,10 @@
 """Probabilistic AI-Generated Media & Authenticity Detector.
 Performs:
-1. 2D FFT Frequency-domain spectral analysis (identifying synthetic grid/checkerboard upsampling artifacts)
-2. Noise residual & cross-channel covariance analysis (PRNU deviation)
-3. Exif / C2PA / generator metadata inspection
-4. Multi-frame temporal consistency (for video streams)
+1. PNG text chunks (parameters, prompt, workflow) and EXIF metadata inspection
+2. Camera hardware signature identification (Make, Model, ISO, Exposure)
+3. 2D FFT Frequency-domain spectral analysis (identifying synthetic grid/checkerboard upsampling artifacts)
+4. Noise residual & cross-channel covariance analysis (PRNU deviation)
+5. Multi-frame temporal consistency (for video streams)
 Strictly adheres to probabilistic classifications:
 - LIKELY_AI_GENERATED
 - POSSIBLY_AI_GENERATED
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 KNOWN_AI_GENERATOR_TAGS = [
     "midjourney", "stable diffusion", "dall-e", "comfyui", "automatic1111",
     "novelai", "civitai", "adobe firefly", "bing image creator", "flux.1",
+    "sdxl", "leonardo.ai", "invokeai", "ideogram", "imagen", "craiyon",
+    "steps:", "sampler:", "cfg scale:", "seed:", "model hash:", "negative prompt:"
 ]
 
 
@@ -67,7 +70,7 @@ def analyze_fft_spectrum(gray_img: np.ndarray) -> Tuple[float, bool]:
         # Peak-to-average ratio in high-frequency band
         peak_ratio = (max_outer - mean_outer) / (std_outer + 1e-6)
 
-        # If peak is > 4 standard deviations above background noise in high freq
+        # If peak is > 4.2 standard deviations above background noise in high freq
         has_peaks = peak_ratio > 4.2
         anomaly_score = min(1.0, max(0.0, (peak_ratio - 2.5) / 4.0))
         return anomaly_score, has_peaks
@@ -119,7 +122,7 @@ class AIMediaDetector(FraudDetector):
 
     @property
     def model_version(self) -> str:
-        return "probabilistic-spectral-residual-v1"
+        return "probabilistic-spectral-residual-v2"
 
     async def analyze(self, **kwargs) -> DetectorResult:
         start_t = time.time()
@@ -127,29 +130,47 @@ class AIMediaDetector(FraudDetector):
         frames_bytes = kwargs.get("frames_bytes", [])
 
         if not file_bytes and not frames_bytes:
-            return self._create_result(0.0, 0.5, ["No media bytes supplied for authenticity check"], 0.0)
+            return self._create_result(0.05, 0.5, ["No media bytes supplied for authenticity check"], 0.0)
 
         signals = []
         metadata = {}
         ai_evidence = []
-        verdict = "INCONCLUSIVE"
-        confidence = 0.50
-        fraud_prob = 0.15
+        has_camera_hardware = False
+        camera_details = ""
+        is_video = bool(frames_bytes)
 
         # Extract frames or load single image
         images_to_test = []
         if file_bytes:
             try:
                 pil_img = Image.open(io.BytesIO(file_bytes))
-                # Check EXIF metadata
+
+                # 1. Check PNG text chunks (parameters, prompt, workflow, etc.)
+                if hasattr(pil_img, "info") and pil_img.info:
+                    for k, v in pil_img.info.items():
+                        v_str = (v.decode("utf-8", errors="ignore") if isinstance(v, bytes) else str(v)).lower()
+                        for tag in KNOWN_AI_GENERATOR_TAGS:
+                            if tag in v_str:
+                                signals.append(f"Image metadata indicates generative AI: '{tag}'")
+                                ai_evidence.append(f"Generation metadata parameter detected: '{tag}'")
+                                break
+
+                # 2. Check EXIF metadata for AI generator tags and authentic camera signatures
                 exif = pil_img.getexif()
                 if exif:
                     for k, v in exif.items():
                         v_str = str(v).lower()
                         for tag in KNOWN_AI_GENERATOR_TAGS:
-                            if tag in v_str:
-                                signals.append(f"Image metadata references generative AI software: '{tag}'")
-                                ai_evidence.append(f"Metadata tag detected: '{tag}'")
+                            if tag in v_str and not any(tag in e for e in ai_evidence):
+                                signals.append(f"EXIF metadata references generative AI software: '{tag}'")
+                                ai_evidence.append(f"EXIF generator tag detected: '{tag}'")
+
+                    # Check physical camera hardware EXIF tags (Make=271, Model=272)
+                    make = str(exif.get(271, "")).strip()
+                    model = str(exif.get(272, "")).strip()
+                    if make or model:
+                        has_camera_hardware = True
+                        camera_details = f"{make} {model}".strip()
 
                 # Downsample to <=1024px to prevent large float32/fft matrix allocation
                 if max(pil_img.width, pil_img.height) > 1024:
@@ -161,7 +182,7 @@ class AIMediaDetector(FraudDetector):
                 logger.debug(f"Could not parse image for AI media check: {e}")
 
         if frames_bytes:
-            for fb in frames_bytes[:2]:
+            for fb in frames_bytes[:4]:
                 try:
                     f_arr = cv2.imdecode(np.frombuffer(fb, np.uint8), cv2.IMREAD_COLOR)
                     if f_arr is not None:
@@ -175,8 +196,8 @@ class AIMediaDetector(FraudDetector):
         if not images_to_test:
             proc_time = (time.time() - start_t) * 1000
             return self._create_result(
-                0.0, 0.5, ["Unable to extract visual matrices for authenticity inspection"], proc_time,
-                metadata={"ai_media": {"result": "INCONCLUSIVE", "confidence": 0.50, "evidence": ["Media format unparseable"]}}
+                0.05, 0.5, ["Unable to extract visual matrices for authenticity inspection"], proc_time,
+                metadata={"ai_media": {"result": "INCONCLUSIVE", "confidence": 50, "evidence": ["Media format unparseable"], "disclaimer": "AI-generated media detection is probabilistic and should not be treated as definitive proof."}}
             )
 
         # Run forensic measures across representative frame(s)
@@ -212,50 +233,55 @@ class AIMediaDetector(FraudDetector):
         # Evaluate signals
         if fft_peaks_count > 0:
             signals.append("High-frequency periodic spectral spikes typical of diffusion/GAN upsampling")
-            ai_evidence.append("Frequency-domain grid artifacts detected")
+            ai_evidence.append("Frequency-domain periodic grid artifacts detected via 2D FFT")
 
-        if avg_noise_var < 0.8:
+        if avg_noise_var < 0.75:
             signals.append("Unnaturally low camera sensor noise variance (characteristic of synthetic rendering)")
-            ai_evidence.append("Lack of natural sensor noise fingerprint")
+            ai_evidence.append("Lack of physical optical sensor noise fingerprint")
         elif avg_noise_var > 15.0 and avg_corr > 0.45:
             signals.append("Unnatural inter-channel residual noise correlation")
-            ai_evidence.append("Abnormal color channel noise correlation")
+            ai_evidence.append("Abnormal color channel noise covariance")
 
-        # Classify based on signals
-        has_metadata_hit = any("generative AI software" in s for s in signals)
+        has_metadata_hit = any("generative AI" in s for s in signals)
 
-        if has_metadata_hit or (fft_peaks_count > 0 and len(ai_evidence) >= 2):
+        # Probabilistic classification based on calculated forensic signals
+        if has_metadata_hit or (fft_peaks_count > 0 and len(ai_evidence) >= 2 and not has_camera_hardware):
             verdict = "LIKELY_AI_GENERATED"
-            confidence = round(float(np.clip(0.76 + avg_fft * 0.12, 0.75, 0.88)), 2)
-            fraud_prob = 0.75
-        elif fft_peaks_count > 0 or len(ai_evidence) >= 2:
-            verdict = "POSSIBLY_AI_GENERATED"
-            confidence = round(float(np.clip(0.60 + avg_fft * 0.10, 0.58, 0.72)), 2)
-            fraud_prob = 0.50
-        elif avg_noise_var >= 1.5 and avg_fft < 0.15 and len(ai_evidence) == 0:
+            confidence = round(float(np.clip(0.78 + avg_fft * 0.12, 0.78, 0.90)), 2)
+        elif has_camera_hardware and not has_metadata_hit and (0.8 <= avg_noise_var <= 25.0):
             verdict = "LIKELY_AUTHENTIC"
-            confidence = 0.75
-            fraud_prob = 0.08
-            signals.append("Natural 1/f spectral energy decay and consistent optical sensor noise observed")
+            confidence = round(float(np.clip(0.78 + (1.0 - avg_fft) * 0.08, 0.76, 0.86)), 2)
+            signals.append(f"Camera hardware EXIF verified: {camera_details}")
+            ai_evidence.append(f"Camera hardware EXIF verified ({camera_details})")
+            signals.append("Natural optical sensor noise variance and photographic EXIF signature observed")
+        elif fft_peaks_count > 0 or (avg_noise_var < 0.70 and avg_fft > 0.25):
+            verdict = "POSSIBLY_AI_GENERATED"
+            confidence = round(float(np.clip(0.60 + avg_fft * 0.10, 0.60, 0.72)), 2)
+        elif is_video:
+            # For video streams without clear deepfake artifacts, default to INCONCLUSIVE
+            verdict = "INCONCLUSIVE"
+            confidence = 0.50
+            signals.append("Video frame consistency is inconclusive; insufficient distinct markers to definitively classify authenticity")
         else:
             verdict = "INCONCLUSIVE"
             confidence = 0.50
-            fraud_prob = 0.20
-            signals.append("Forensic signals are neutral; insufficient evidence to definitively classify authenticity")
+            signals.append("Forensic signals are within normal range; insufficient distinct markers to classify authenticity")
 
         proc_time = (time.time() - start_t) * 1000
 
         ai_media_data = {
             "result": verdict,
-            "confidence": int(confidence * 100),
-            "evidence": ai_evidence if ai_evidence else ["No distinct synthetic or authentic anomalies detected"],
+            "confidence": int(round(confidence * 100)),
+            "evidence": ai_evidence if ai_evidence else ["Forensic signals are within standard variance; insufficient distinct markers to classify authenticity."],
             "disclaimer": "AI-generated media detection is probabilistic and should not be treated as definitive proof."
         }
 
         metadata["ai_media"] = ai_media_data
 
+        # Authenticity check sets fraud_probability to 0.05 because synthetic origin
+        # is an authenticity question, not an inherent security fraud threat.
         return self._create_result(
-            probability=fraud_prob,
+            probability=0.05,
             confidence=confidence,
             signals=signals,
             processing_time_ms=proc_time,
