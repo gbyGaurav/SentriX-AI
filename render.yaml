@@ -1,0 +1,34 @@
+services:
+  # UAMD Backend API on Render
+  - type: web
+    name: uamd-backend
+    env: python
+    region: oregon
+    plan: standard
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        fromDatabase:
+          name: uamd-db
+          property: connectionString
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+      - key: ENABLE_LLM
+        value: "true"
+
+databases:
+  - name: uamd-db
+    databaseName: uamd
+    user: uamd_user
+    plan: free
+    region: oregon

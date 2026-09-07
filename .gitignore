@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js
+node_modules/
+.next/
+out/
+.vercel
+
+# ML Models (large files)
+backend/models/*.pkl
+backend/models/*.joblib
+backend/models/*.pt
+backend/models/*.pth
+backend/models/*.onnx
+backend/models/*.h5
+backend/models/*.bin
+!backend/models/.gitkeep
+
+# Datasets (large files)
+datasets/data/
+datasets/*.csv
+datasets/*.json
+datasets/*.parquet
+!datasets/README.md
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Docker
+.docker/
+
+# Alembic
+backend/alembic/versions/*.pyc
