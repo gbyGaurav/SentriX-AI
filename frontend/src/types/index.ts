@@ -27,6 +27,7 @@ export interface EvidenceItem {
 
 export interface AnalysisResponse {
   analysis_id: string;
+  id?: string;
   input_type: InputType;
   risk_score: number;
   risk_level: RiskLevel;

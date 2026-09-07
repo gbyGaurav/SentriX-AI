@@ -37,5 +37,9 @@ async def get_db():
 
 
 async def init_db():
+    # Ensure all models are loaded and registered with Base.metadata before creating tables
+    from app.db import models  # noqa: F401
+    logger.info(f"Initializing database tables: {list(Base.metadata.tables.keys())}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables initialized successfully.")

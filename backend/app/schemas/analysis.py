@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing import List, Optional, Any, Dict
 
 class InputType(str, Enum):
@@ -58,19 +58,26 @@ class AnalysisRequest(BaseModel):
 
 class AnalysisResponse(BaseModel):
     analysis_id: str
+    id: Optional[str] = None
     input_type: InputType
     risk_score: int
     risk_level: RiskLevel
     fraud_types: List[FraudType]
     confidence: float
     detectors: List[DetectorResult]
-    evidence: List[EvidenceItem]
+    evidence: List[EvidenceItem] = []
     explanation: str
     recommendations: List[str]
     extracted_content: Dict[str, Any] = {}
     processing_time_ms: float
     created_at: str
     disclaimer: str = 'SentriX provides AI-based risk assessment, not definitive proof of fraud. Always verify important information through an independent trusted source.'
+
+    @model_validator(mode='after')
+    def ensure_id(self):
+        if not self.id and self.analysis_id:
+            self.id = self.analysis_id
+        return self
 
 class HistoryItem(BaseModel):
     analysis_id: str

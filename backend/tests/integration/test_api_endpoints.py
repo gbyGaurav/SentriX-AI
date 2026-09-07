@@ -1,6 +1,12 @@
 import pytest
 import httpx
 from app.main import app
+from app.db.database import init_db
+
+
+@pytest.fixture(autouse=True)
+async def setup_db():
+    await init_db()
 
 
 @pytest.mark.asyncio

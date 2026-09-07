@@ -48,8 +48,9 @@ export default function UploadZone() {
 
   const processFile = async (file: File) => {
     const res = await submitFile(file);
-    if (res?.analysis_id) {
-      router.push(`/analysis/${res.analysis_id}`);
+    const targetId = res?.analysis_id || res?.id;
+    if (targetId) {
+      router.push(`/analysis/${targetId}`);
     }
   };
 
@@ -59,8 +60,9 @@ export default function UploadZone() {
     const isUrl = /^(https?:\/\/|[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$)/i.test(textInput.trim());
     
     const res = isUrl ? await submitUrl(textInput.trim()) : await submitText(textInput);
-    if (res?.analysis_id) {
-      router.push(`/analysis/${res.analysis_id}`);
+    const targetId = res?.analysis_id || res?.id;
+    if (targetId) {
+      router.push(`/analysis/${targetId}`);
     }
   };
 

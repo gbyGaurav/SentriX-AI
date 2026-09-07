@@ -23,7 +23,10 @@ from app.schemas.analysis import (
     AnalysisRequest,
     AnalysisResponse,
     DetectorResult,
+    EvidenceItem,
+    FraudType,
     InputType,
+    RiskLevel,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,15 +123,16 @@ async def _run_analysis(
     # 8. Save to database
     proc_time = (time.time() - start_t) * 1000
     analysis_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
+    logger.info(f"POST: Created analysis ID = {analysis_id}")
 
     try:
         db_analysis = Analysis(
             id=analysis_id,
             input_type=input_type.value,
             risk_score=r_score,
-            risk_level=r_level.value,
-            fraud_types=[f.value for f in f_types],
+            risk_level=r_level.value if hasattr(r_level, "value") else str(r_level),
+            fraud_types=[f.value if hasattr(f, "value") else str(f) for f in f_types],
             confidence=f_conf,
             explanation=explanation,
             recommendations=recommendations,
@@ -140,35 +144,41 @@ async def _run_analysis(
 
         for d in det_results:
             db_det = DetectorResultDB(
+                id=str(uuid.uuid4()),
                 analysis_id=analysis_id,
                 module=d.module,
-                fraud_probability=d.fraud_probability,
-                confidence=d.confidence,
-                risk=d.risk.value,
-                signals=d.signals,
-                model_version=d.model_version,
-                processing_time_ms=d.processing_time_ms,
-                metadata_=d.metadata,
+                fraud_probability=float(d.fraud_probability),
+                confidence=float(d.confidence),
+                risk=d.risk.value if hasattr(d.risk, "value") else str(d.risk),
+                signals=list(d.signals),
+                model_version=str(d.model_version),
+                processing_time_ms=float(d.processing_time_ms),
+                metadata_=d.metadata or {},
             )
             db.add(db_det)
 
         for ev in ev_items:
             db_ev = EvidenceDB(
+                id=str(uuid.uuid4()),
                 analysis_id=analysis_id,
-                evidence_type=ev.evidence_type,
-                source_modality=ev.source_modality,
+                evidence_type=str(ev.evidence_type),
+                source_modality=str(ev.source_modality),
                 target_modality=ev.target_modality,
-                content=ev.content[:500],  # Truncate to avoid huge storage
-                severity=ev.severity,
+                content=str(ev.content[:500]) if ev.content else "",
+                severity=str(ev.severity) if hasattr(ev.severity, "value") else str(ev.severity),
                 evidence_relationship=ev.relationship,
             )
             db.add(db_ev)
 
         await db.commit()
+        logger.info(f"POST: Successfully committed analysis ID = {analysis_id} to database")
     except Exception as e:
-        logger.error(f"Database save failed: {e}", exc_info=True)
-        # Don't fail the response — the analysis was successful even if DB write fails
+        logger.error(f"POST: Database save failed for analysis ID = {analysis_id}: {e}", exc_info=True)
         await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database persistence failed: {type(e).__name__}: {str(e)}",
+        )
 
     logger.info(
         f"Analysis complete: id={analysis_id}, type={input_type.value}, "
@@ -177,6 +187,7 @@ async def _run_analysis(
 
     return AnalysisResponse(
         analysis_id=analysis_id,
+        id=analysis_id,
         input_type=input_type,
         risk_score=r_score,
         risk_level=r_level,
@@ -188,7 +199,7 @@ async def _run_analysis(
         recommendations=recommendations,
         extracted_content=ext_content,
         processing_time_ms=proc_time,
-        created_at=now.isoformat(),
+        created_at=now.isoformat() + "Z",
     )
 
 
@@ -226,29 +237,38 @@ async def analyze_text(request: AnalysisRequest, db: AsyncSession = Depends(get_
 @router.get("/analysis/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(analysis_id: str, db: AsyncSession = Depends(get_db)):
     """Retrieve a past analysis by ID."""
+    logger.info(f"GET: Requested analysis ID = {analysis_id}")
     stmt = (
         select(Analysis)
-        .options(selectinload(Analysis.detectors))
+        .options(
+            selectinload(Analysis.detectors),
+            selectinload(Analysis.evidences),
+        )
         .where(Analysis.id == analysis_id)
     )
     result = await db.execute(stmt)
     db_a = result.scalar_one_or_none()
     if not db_a:
+        logger.warning(f"GET: Requested analysis ID = {analysis_id}")
+        logger.warning("GET: Database lookup result = NOT FOUND")
         raise HTTPException(status_code=404, detail="Analysis not found.")
+
+    logger.info("GET: Database lookup result = FOUND")
 
     return AnalysisResponse(
         analysis_id=db_a.id,
+        id=db_a.id,
         input_type=InputType(db_a.input_type),
         risk_score=db_a.risk_score,
-        risk_level=db_a.risk_level,
-        fraud_types=db_a.fraud_types,
+        risk_level=RiskLevel(db_a.risk_level) if isinstance(db_a.risk_level, str) else db_a.risk_level,
+        fraud_types=[FraudType(f) if isinstance(f, str) else f for f in db_a.fraud_types],
         confidence=db_a.confidence,
         detectors=[
             DetectorResult(
                 module=d.module,
                 fraud_probability=d.fraud_probability,
                 confidence=d.confidence,
-                risk=d.risk,
+                risk=RiskLevel(d.risk) if isinstance(d.risk, str) else d.risk,
                 signals=d.signals,
                 model_version=d.model_version,
                 processing_time_ms=d.processing_time_ms,
@@ -256,10 +276,20 @@ async def get_analysis(analysis_id: str, db: AsyncSession = Depends(get_db)):
             )
             for d in db_a.detectors
         ],
-        evidence=[],  # Evidence not eagerly loaded for past analyses
+        evidence=[
+            EvidenceItem(
+                evidence_type=ev.evidence_type,
+                source_modality=ev.source_modality,
+                target_modality=ev.target_modality,
+                content=ev.content,
+                severity=ev.severity,
+                relationship=ev.evidence_relationship,
+            )
+            for ev in db_a.evidences
+        ],
         explanation=db_a.explanation,
         recommendations=db_a.recommendations,
         extracted_content=db_a.extracted_content,
         processing_time_ms=db_a.processing_time_ms,
-        created_at=db_a.created_at.isoformat(),
+        created_at=db_a.created_at.isoformat() + "Z" if not db_a.created_at.isoformat().endswith("Z") else db_a.created_at.isoformat(),
     )

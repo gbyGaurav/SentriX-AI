@@ -24,14 +24,26 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = params.id as string;
-    if (!id) return;
+    const rawId = params?.id;
+    const id = Array.isArray(rawId) ? rawId[0] : rawId;
+    if (!id || id === 'undefined' || id === 'null') {
+      setError('Invalid analysis ID.');
+      setLoading(false);
+      return;
+    }
 
     getAnalysis(id)
       .then(setAnalysis)
-      .catch(err => setError(err.message || 'Failed to load analysis'))
+      .catch(err => {
+        let msg = err.message || 'Failed to load analysis';
+        try {
+          const parsed = JSON.parse(msg);
+          if (parsed.detail) msg = parsed.detail;
+        } catch {}
+        setError(msg);
+      })
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [params]);
 
   if (loading) {
     return (
