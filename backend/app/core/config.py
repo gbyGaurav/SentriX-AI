@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ''
     LLM_MODEL: str = 'gpt-4o-mini'
     
-    ALLOWED_ORIGINS: str = 'http://localhost:3000'
+    ALLOWED_ORIGINS: str = 'http://localhost:3000,https://sentrix-ai-ashen.vercel.app,https://sentri-x-ai-ashen.vercel.app'
     SECRET_KEY: str = 'super-secret-key'
     
     MAX_FILE_SIZE_IMAGE: int = 10485760

@@ -52,8 +52,17 @@ app = FastAPI(
 
 # CORS middleware
 origins = list(settings.allowed_origins_list)
-if "http://localhost:3000" not in origins:
-    origins.append("http://localhost:3000")
+default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://sentrix-ai-ashen.vercel.app",
+    "https://sentri-x-ai-ashen.vercel.app",
+    "https://sentrix-ai.vercel.app",
+    "https://sentri-x.vercel.app",
+]
+for o in default_origins:
+    if o not in origins:
+        origins.append(o)
 
 app.add_middleware(
     CORSMiddleware,
